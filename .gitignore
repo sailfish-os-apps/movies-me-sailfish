@@ -1,0 +1,15 @@
+Makefile
+*.pro.user*
+*~
+*.list
+moc/
+rcc/
+obj/
+_moc/
+_rcc/
+_obj/
+RPMS/
+rpm/*.spec
+moc_*.cpp
+*.o
+qrc_*.cpp

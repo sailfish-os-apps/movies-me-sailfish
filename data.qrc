@@ -1,0 +1,11 @@
+<RCC>
+    <qresource prefix="/">
+        <file>qml/harbour-moviesme.qml</file>
+        <file>qml/components/CachedImage.qml</file>
+        <file>qml/pages/MoviesSearchAndAddPage.qml</file>
+        <file>qml/pages/MoviesListPage.qml</file>
+        <file>qml/pages/MovieDetailsPage.qml</file>
+        <file>qml/cover/CoverPage.qml</file>
+        <file>qml/images/no-poster-w342.jpg</file>
+    </qresource>
+</RCC>
