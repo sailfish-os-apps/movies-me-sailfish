@@ -22,18 +22,6 @@
 MoviesWorker::MoviesWorker (QObject * parent) : QObject (parent) {
     m_db  = QSqlDatabase::addDatabase (QStringLiteral ("QSQLITE"));
     m_nam = new QNetworkAccessManager (this);
-
-    for (int countryEnum = 0; countryEnum < QLocale::LastCountry; countryEnum++) {
-        m_hashCountries.insert (ISO::countryCodeFromISO3166 (QLocale::Country (countryEnum)),
-                                ISO::countryNameFromISO3166 (QLocale::Country (countryEnum)));
-    }
-    //qDebug () << "m_hashCountries:" << m_hashCountries.count () << m_hashCountries;
-
-    for (int langEnum = 0; langEnum < QLocale::LastLanguage; langEnum++) {
-        m_hashLanguages.insert (ISO::languageCodeFromISO639 (QLocale::Language (langEnum)),
-                                ISO::languageNameFromISO639 (QLocale::Language (langEnum)));
-    }
-    //qDebug () << "m_hashLanguages:" << m_hashLanguages.count () << m_hashLanguages;
 }
 
 void MoviesWorker::initialize () {
@@ -153,12 +141,12 @@ void MoviesWorker::onSearchReply () {
         //qDebug () << "data=" << data;
         QVariant object = JSON::parse (QString::fromUtf8 (data));
         if (object.isValid ()) {
-            QVariantList list = getSubValue (object, QStringLiteral ("results")).value<QVariantList> ();
+            QVariantList list = JSON::getSubValue (object, QStringLiteral ("results")).value<QVariantList> ();
             foreach (QVariant value, list) {
-                QString poster = getSubValue (value, QStringLiteral ("poster_path")).value<QString> ();
+                QString poster = JSON::getSubValue (value, QStringLiteral ("poster_path")).value<QString> ();
                 QVariantMap item;
-                item.insert (QStringLiteral ("tmdbId"), getSubValue (value, QStringLiteral ("id")).value<int> ());
-                item.insert (QStringLiteral ("title"),  getSubValue (value, QStringLiteral ("original_title")).value<QString> ());
+                item.insert (QStringLiteral ("tmdbId"), JSON::getSubValue (value, QStringLiteral ("id")).value<int> ());
+                item.insert (QStringLiteral ("title"),  JSON::getSubValue (value, QStringLiteral ("original_title")).value<QString> ());
                 item.insert (QStringLiteral ("cover"),  (!poster.isEmpty () ? tmdbImgUrl + poster : imgNoPoster));
                 ret.append (item);
             }
@@ -181,27 +169,49 @@ void MoviesWorker::onMovieReply () {
         //qDebug () << "data=" << data;
         QVariant object = JSON::parse (QString::fromUtf8 (data));
         if (object.isValid ()) {
-            int     tmdbId = getSubValue (object, QStringLiteral ("id")).value<int> ();
-            QString poster = getSubValue (object, QStringLiteral ("poster_path")).value<QString> ();
+            int          tmdbId  = JSON::getSubValue (object, QStringLiteral ("id")).value<int> ();
+            QString      poster  = JSON::getSubValue (object, QStringLiteral ("poster_path")).value<QString> ();
+            QString      title   = JSON::getSubValue (object, QStringLiteral ("original_title")).value<QString> ();
+            QString      summary = JSON::getSubValue (object, QStringLiteral ("overview")).value<QString> ();
 
-            QVariantMap movieItem;
-            movieItem.insert (QStringLiteral ("tmdbId"),    tmdbId);
-            movieItem.insert (QStringLiteral ("title"),     getSubValue (object, QStringLiteral ("original_title")).value<QString> ());
-            movieItem.insert (QStringLiteral ("overview"),  getSubValue (object, QStringLiteral ("overview")).value<QString> ());
-            movieItem.insert (QStringLiteral ("cover"),     (!poster.isEmpty () ? tmdbImgUrl + poster : imgNoPoster));
-            emit movieItemUpdated (tmdbId, movieItem);
+            QVariantMap  info;
+            info.insert (QStringLiteral ("releaseDatesList"), JSON::getSubValue (object, QStringLiteral ("releases/countries")).value<QVariantList> ());
+            info.insert (QStringLiteral ("altTitlesList"),    JSON::getSubValue (object, QStringLiteral ("alternative_titles/titles")).value<QVariantList> ());
+            info.insert (QStringLiteral ("crewTeamList"),     JSON::getSubValue (object, QStringLiteral ("credits/crew")).value<QVariantList> ());
+            info.insert (QStringLiteral ("castRolesList"),    JSON::getSubValue (object, QStringLiteral ("credits/cast")).value<QVariantList> ());
 
-            QVariantList releaseDatesList = getSubValue (object, QStringLiteral ("releases/countries")).value<QVariantList> ();
-            emit releaseDatesUpdated (releaseDatesList);
+            m_db.transaction ();
 
-            QVariantList altTitlesList = getSubValue (object, QStringLiteral ("alternative_titles/titles")).value<QVariantList> ();
-            emit altTitlesUpdated (altTitlesList);
+            QSqlQuery queryAdd  (m_db);
+            queryAdd.prepare    (QStringLiteral ("INSERT OR IGNORE INTO movies (tmdbId) VALUES (:tmdbId)"));
+            queryAdd.bindValue  (QStringLiteral (":tmdbId"),   tmdbId);
+            queryAdd.exec       ();
+            QSqlQuery queryEdit (m_db);
+            queryEdit.prepare   (QStringLiteral ("UPDATE movies SET title=:title, summary=:summary, cover=:cover WHERE tmdbId=:tmdbId"));
+            queryEdit.bindValue (QStringLiteral (":tmdbId"),   tmdbId);
+            queryEdit.bindValue (QStringLiteral (":title"),    title);
+            queryEdit.bindValue (QStringLiteral (":summary"),  summary);
+            queryEdit.bindValue (QStringLiteral (":cover"),    (!poster.isEmpty () ? tmdbImgUrl + poster : imgNoPoster));
+            queryEdit.exec      ();
 
-            QVariantList crewTeamList = getSubValue (object, QStringLiteral ("credits/crew")).value<QVariantList> ();
-            emit crewTeamUpdated (crewTeamList);
+            QSqlQuery queryAddInfo  (m_db);
+            queryAddInfo.prepare    (QStringLiteral ("INSERT OR IGNORE INTO sublists (tmdbId, type) VALUES (:tmdbId, :type)"));
+            QSqlQuery queryEditInfo (m_db);
+            queryEditInfo.prepare   (QStringLiteral ("UPDATE sublists SET json=:json WHERE tmdbId=:tmdbId AND type=:type"));
+            foreach (QString type, info.keys ()) {
+                QString json = JSON::stringify (info.value (type));
+                queryAddInfo.bindValue  (QStringLiteral (":tmdbId"), tmdbId);
+                queryAddInfo.bindValue  (QStringLiteral (":type"),   type);
+                queryAddInfo.exec       ();
+                queryEditInfo.bindValue (QStringLiteral (":tmdbId"), tmdbId);
+                queryEditInfo.bindValue (QStringLiteral (":type"),   type);
+                queryEditInfo.bindValue (QStringLiteral (":json"),   json);
+                queryEditInfo.exec      ();
+            }
 
-            QVariantList castRolesList = getSubValue (object, QStringLiteral ("credits/cast")).value<QVariantList> ();
-            emit castRolesUpdated (castRolesList);
+            m_db.commit ();
+
+            loadMovieDetailsFromDb (tmdbId);
         }
         else {
             qWarning () << "Movie info : result is not an object !";
@@ -209,6 +219,55 @@ void MoviesWorker::onMovieReply () {
     }
     else {
         qWarning () << "Network error on movie info request :" << reply->errorString ();
+    }
+}
+
+void MoviesWorker::loadMovieDetailsFromDb (int tmdbId) {
+    qDebug () << "MoviesWorker::loadMovieDetailsFromDb" << tmdbId;
+    QSqlQuery queryLoad (m_db);
+    queryLoad.prepare   (QStringLiteral ("SELECT tmdbId, title, cover, summary, vote FROM movies WHERE tmdbId=:tmdbId"));
+    queryLoad.bindValue (QStringLiteral (":tmdbId"), tmdbId);
+    if (queryLoad.exec ()) {
+        QSqlRecord record     = queryLoad.record ();
+        int fieldMovieVote    = record.indexOf (QStringLiteral ("vote"));
+        int fieldMovieTitle   = record.indexOf (QStringLiteral ("title"));
+        int fieldMovieCover   = record.indexOf (QStringLiteral ("cover"));
+        int fieldMovieSummary = record.indexOf (QStringLiteral ("summary"));
+        while (queryLoad.next ()) {
+            QVariantMap values;
+            values.insert (QStringLiteral ("tmdbId"),  tmdbId);
+            values.insert (QStringLiteral ("vote"),    queryLoad.value (fieldMovieVote).toInt ());
+            values.insert (QStringLiteral ("title"),   queryLoad.value (fieldMovieTitle).toString ());
+            values.insert (QStringLiteral ("cover"),   queryLoad.value (fieldMovieCover).toString ());
+            values.insert (QStringLiteral ("summary"), queryLoad.value (fieldMovieSummary).toString ());
+            emit movieItemAdded   (tmdbId);
+            emit movieItemUpdated (tmdbId, values);
+        }
+    }
+    QSqlQuery querySubList (m_db);
+    querySubList.prepare   (QStringLiteral ("SELECT tmdbId, type, json FROM sublists WHERE tmdbId=:tmdbId"));
+    querySubList.bindValue (QStringLiteral (":tmdbId"), tmdbId);
+    if (querySubList.exec ()) {
+        QSqlRecord record  = querySubList.record ();
+        int fieldMovieType = record.indexOf (QStringLiteral ("type"));
+        int fieldMovieJson = record.indexOf (QStringLiteral ("json"));
+        while (querySubList.next ()) {
+            QString      type = querySubList.value (fieldMovieType).toString ();
+            QString      json = querySubList.value (fieldMovieJson).toString ();
+            QVariantList list = JSON::parse (json).toList ();
+            if (type == QStringLiteral ("releaseDatesList")) {
+                emit releaseDatesUpdated (list);
+            }
+            else if (type == QStringLiteral ("altTitlesList")) {
+                emit altTitlesUpdated (list);
+            }
+            else if (type == QStringLiteral ("crewTeamList")) {
+                emit crewTeamUpdated (list);
+            }
+            else if (type == QStringLiteral ("castRolesList")) {
+                emit castRolesUpdated (list);
+            }
+        }
     }
 }
 

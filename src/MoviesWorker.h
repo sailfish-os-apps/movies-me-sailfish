@@ -23,12 +23,13 @@ public:
     explicit MoviesWorker    (QObject * parent = NULL);
 
 public slots:
-    void initialize          ();
-    void loadMoviesFromDb    ();
-    void searchForMovie      (QString name);
-    void removeMovieInfo     (int     tmdbId);
-    void getFullMovieInfo    (int     tmdbId);
-    void updateMovieVote     (int     tmdbId, int vote);
+    void initialize             ();
+    void loadMoviesFromDb       ();
+    void loadMovieDetailsFromDb (int     tmdbId);
+    void removeMovieInfo        (int     tmdbId);
+    void getFullMovieInfo       (int     tmdbId);
+    void updateMovieVote        (int     tmdbId, int vote);
+    void searchForMovie         (QString name);
 
 signals:
     void movieItemAdded      (int tmdbId);
@@ -49,8 +50,6 @@ private slots:
 private:
     QSqlDatabase            m_db;
     QNetworkAccessManager * m_nam;
-    QHash<QString, QString> m_hashCountries;
-    QHash<QString, QString> m_hashLanguages;
 };
 
 #endif // MOVIESWORKER_H

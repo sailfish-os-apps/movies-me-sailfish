@@ -72,6 +72,10 @@ Page {
                 }
             }
         }
+        ViewPlaceholder {
+            text: qsTr ("No movie. Use menu to add some...");
+            enabled: !view.count;
+        }
         VerticalScrollDecorator {}
     }
     DockedPanel {

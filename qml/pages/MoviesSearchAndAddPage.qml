@@ -115,7 +115,11 @@ Page {
                 }
             }
             Label {
-                text: qsTr ("%1 results").arg (view.count);
+                text: (view.count
+                       ? qsTr ("%1 results").arg (view.count)
+                       : (inputSearch.text !== ""
+                          ? qsTr ("No matching result !")
+                          : ""));
                 width: view.width;
                 horizontalAlignment: Text.AlignHCenter;
             }

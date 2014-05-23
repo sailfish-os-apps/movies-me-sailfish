@@ -3,6 +3,8 @@
 #include "MoviesWorker.h"
 #include "MovieItem.h"
 
+#include "commondefs.h"
+
 #include <QDebug>
 
 MoviesEngine::MoviesEngine (QObject * parent) : QObject (parent) {
@@ -15,6 +17,18 @@ MoviesEngine::MoviesEngine (QObject * parent) : QObject (parent) {
     m_castRolesList    = new QQmlVariantListModel (this); // { "character" : "Mr Bean", "name" : "The Actor", "profile_path" : "img/url" }
     m_crewTeamList     = new QQmlVariantListModel (this); // { "job" : "Job name", "name" : "The Person", "profile_path" : "img/url" }
     m_altTitlesList    = new QQmlVariantListModel (this); // { "iso_3166_1" : "US", "title" : "The US title" }
+
+    for (int countryEnum = 0; countryEnum < QLocale::LastCountry; countryEnum++) {
+        m_hashCountries.insert (ISO::countryCodeFromISO3166 (QLocale::Country (countryEnum)),
+                                ISO::countryNameFromISO3166 (QLocale::Country (countryEnum)));
+    }
+    //qDebug () << "m_hashCountries:" << m_hashCountries.count () << m_hashCountries;
+
+    for (int langEnum = 0; langEnum < QLocale::LastLanguage; langEnum++) {
+        m_hashLanguages.insert (ISO::languageCodeFromISO639 (QLocale::Language (langEnum)),
+                                ISO::languageNameFromISO639 (QLocale::Language (langEnum)));
+    }
+    //qDebug () << "m_hashLanguages:" << m_hashLanguages.count () << m_hashLanguages;
 
     // separated thread
     m_thread = new QThread (this);
@@ -30,6 +44,7 @@ MoviesEngine::MoviesEngine (QObject * parent) : QObject (parent) {
     connect (this,      &MoviesEngine::fullMovieInfoRequested,      m_worker, &MoviesWorker::getFullMovieInfo);
     connect (this,      &MoviesEngine::removeMovieRequested,        m_worker, &MoviesWorker::removeMovieInfo);
     connect (this,      &MoviesEngine::updateMovieVoteRequested,    m_worker, &MoviesWorker::updateMovieVote);
+    connect (this,      &MoviesEngine::loadMovieDetailsRequested,   m_worker, &MoviesWorker::loadMovieDetailsFromDb);
 
     // replies
     connect (m_worker,  &MoviesWorker::movieSearchResults,          this,     &MoviesEngine::onMovieSearchResults);
@@ -45,6 +60,14 @@ MoviesEngine::MoviesEngine (QObject * parent) : QObject (parent) {
     connect (this,      &MoviesEngine::currentMovieIdChanged,       this,     &MoviesEngine::onCurrentMovieIdChanged);
 
     m_thread->start (QThread::HighestPriority);
+}
+
+QString MoviesEngine::getFullCountryName (QString countryCode) {
+    return m_hashCountries.value (countryCode, countryCode);
+}
+
+QString MoviesEngine::getFullLanguageName (QString languageCode) {
+    return m_hashLanguages.value (languageCode, languageCode);
 }
 
 void MoviesEngine::requestSearch (QString name) {
@@ -81,7 +104,11 @@ void MoviesEngine::onMovieItemRemoved (int tmdbId) {
 
 void MoviesEngine::onCurrentMovieIdChanged (int tmdbId) {
     qDebug () << "MoviesEngine::onCurrentMovieIdChanged" << tmdbId;
-
+    m_crewTeamList->clear     ();
+    m_castRolesList->clear    ();
+    m_altTitlesList->clear    ();
+    m_releaseDatesList->clear ();
+    emit loadMovieDetailsRequested (tmdbId);
 }
 
 void MoviesEngine::onMovieItemUpdated (int tmdbId, QVariantMap values) {
@@ -105,20 +132,24 @@ void MoviesEngine::onMovieSearchResults (QVariantList list) {
 
 void MoviesEngine::onReleaseDatesUpdated (QVariantList list) {
     qDebug () << "MoviesEngine::onReleaseDatesUpdated" << list;
-
+    m_releaseDatesList->clear ();
+    m_releaseDatesList->append (list);
 }
 
 void MoviesEngine::onCastRolesUpdated (QVariantList list) {
     qDebug () << "MoviesEngine::onCastRolesUpdated" << list;
-
+    m_castRolesList->clear ();
+    m_castRolesList->append (list);
 }
 
 void MoviesEngine::onCrewTeamUpdated (QVariantList list) {
     qDebug () << "MoviesEngine::onCrewTeamUpdated" << list;
-
+    m_crewTeamList->clear ();
+    m_crewTeamList->append (list);
 }
 
 void MoviesEngine::onAltTitlesUpdated (QVariantList list) {
     qDebug () << "MoviesEngine::onAltTitlesUpdated" << list;
-
+    m_altTitlesList->clear ();
+    m_altTitlesList->append (list);
 }

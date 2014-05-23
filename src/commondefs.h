@@ -588,47 +588,6 @@ static QString countryCodes [] = {
     "XK",  // Kosovo
 };
 
-QVariant getSubValue (const QVariant & variant, const QString & valuePath) {
-    QVariant ret;
-    if (!valuePath.isEmpty ())  {
-        QVariant tmp = variant;
-        QStringList tokens = valuePath.split ('/');
-        int idx = 0;
-        bool error = false;
-        while (idx < tokens.count () && !error) {
-            QString key = tokens.value (idx);
-            bool isNumber = false;
-            int number = key.toInt (&isNumber, 10);
-            if (isNumber) {
-                QVariantList list = tmp.toList ();
-                if (!list.isEmpty () && number >= 0 && number < list.count ()) {
-                    tmp = list.value (number);
-                }
-                else {
-                    error = true;
-                }
-            }
-            else {
-                QVariantMap obj = tmp.toMap ();
-                if (!obj.isEmpty () && obj.contains (key)) {
-                    tmp = obj.value (key);
-                }
-                else {
-                    error = true;
-                }
-            }
-            idx++;
-        }
-        if (!error) {
-            ret = tmp;
-        }
-    }
-    else {
-        ret = variant;
-    }
-    return ret;
-}
-
 class ISO {
 public:
     static QString countryCodeFromISO3166 (QLocale::Country countryEnum) {
@@ -647,7 +606,7 @@ public:
 
 class JSON {
 public:
-    static QString stringify (QVariant variant) {
+    static QString stringify (const QVariant & variant) {
         QString json;
         QJsonDocument doc = QJsonDocument::fromVariant (variant);
         if (!doc.isNull ()) {
@@ -662,6 +621,46 @@ public:
             variant = doc.toVariant ();
         }
         return variant;
+    }
+    static QVariant getSubValue (const QVariant & variant, const QString & valuePath) {
+        QVariant ret;
+        if (!valuePath.isEmpty ())  {
+            QVariant tmp = variant;
+            QStringList tokens = valuePath.split ('/');
+            int idx = 0;
+            bool error = false;
+            while (idx < tokens.count () && !error) {
+                QString key = tokens.value (idx);
+                bool isNumber = false;
+                int number = key.toInt (&isNumber, 10);
+                if (isNumber) {
+                    QVariantList list = tmp.toList ();
+                    if (!list.isEmpty () && number >= 0 && number < list.count ()) {
+                        tmp = list.value (number);
+                    }
+                    else {
+                        error = true;
+                    }
+                }
+                else {
+                    QVariantMap obj = tmp.toMap ();
+                    if (!obj.isEmpty () && obj.contains (key)) {
+                        tmp = obj.value (key);
+                    }
+                    else {
+                        error = true;
+                    }
+                }
+                idx++;
+            }
+            if (!error) {
+                ret = tmp;
+            }
+        }
+        else {
+            ret = variant;
+        }
+        return ret;
     }
 };
 
