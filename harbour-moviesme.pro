@@ -41,7 +41,8 @@ HEADERS += \
     src/libQtQmlTricks/qqmlobjectlistmodel.h \
     src/libQtQmlTricks/qqmlobjectlistmodel_p.h \
     src/libQtQmlTricks/qqmlvariantlistmodel.h \
-    src/libQtQmlTricks/qqmlvariantlistmodel_p.h
+    src/libQtQmlTricks/qqmlvariantlistmodel_p.h \
+    src/commondefs.h
 
 RESOURCES += \
     data.qrc

@@ -1,6 +1,8 @@
 
 #include "MoviesWorker.h"
 
+#include "commondefs.h"
+
 #include <QStandardPaths>
 #include <QDir>
 #include <QUrl>
@@ -10,35 +12,31 @@
 #include <QSqlRecord>
 #include <QNetworkReply>
 #include <QNetworkRequest>
-#include <QJsonParseError>
-#include <QJsonDocument>
-#include <QJsonArray>
-#include <QJsonObject>
+#include <QNetworkConfiguration>
 #include <QLocale>
+
+#define GET_SENDER(TYPE,NAME) \
+    TYPE * NAME = qobject_cast<TYPE *> (sender ()); \
+    Q_ASSERT (NAME)
+
+
+
 
 MoviesWorker::MoviesWorker (QObject * parent) : QObject (parent) {
     m_db  = QSqlDatabase::addDatabase (QStringLiteral ("QSQLITE"));
     m_nam = new QNetworkAccessManager (this);
 
     for (int countryEnum = 0; countryEnum < QLocale::LastCountry; countryEnum++) {
-        QString countryName = QLocale::countryToString (QLocale::Country (countryEnum));
-        QString countryCode = countryCodes [countryEnum];
-        //qDebug () << "countryEnum=" << countryEnum
-        //          << "countryName=" << countryName
-        //          << "countryCode=" << countryCode;
-        m_hashCountries.insert (countryCode, countryName);
+        m_hashCountries.insert (ISO::countryCodeFromISO3166 (QLocale::Country (countryEnum)),
+                                ISO::countryNameFromISO3166 (QLocale::Country (countryEnum)));
     }
-    //qDebug () << "m_hashCountries:" << m_hashCountries.count () << m_hashCountries;
+    qDebug () << "m_hashCountries:" << m_hashCountries.count () << m_hashCountries;
 
     for (int langEnum = 0; langEnum < QLocale::LastLanguage; langEnum++) {
-        QString langName = QLocale::languageToString (QLocale::Language (langEnum));
-        QString langCode = languageCodes [langEnum];
-        //qDebug () << "langEnum=" << langEnum
-        //          << "langName=" << langName
-        //          << "langCode=" << langCode;
-        m_hashLanguages.insert (langCode, langName);
+        m_hashLanguages.insert (ISO::languageCodeFromISO639 (QLocale::Language (langEnum)),
+                                ISO::languageNameFromISO639 (QLocale::Language (langEnum)));
     }
-    //qDebug () << "m_hashLanguages:" << m_hashLanguages.count () << m_hashLanguages;
+    qDebug () << "m_hashLanguages:" << m_hashLanguages.count () << m_hashLanguages;
 }
 
 void MoviesWorker::initialize () {
@@ -53,10 +51,16 @@ void MoviesWorker::initialize () {
         m_db.exec (QStringLiteral ("CREATE TABLE IF NOT EXISTS movies ( "
                                    "    tmdbId  INTEGER NOT NULL, "
                                    "    title   TEXT    NOT NULL DEFAULT (''), "
-                                   "    cover   TEXT             DEFAULT (''), "
-                                   "    summary TEXT             DEFAULT (''), "
+                                   "    cover   TEXT    NOT NULL DEFAULT (''), "
+                                   "    summary TEXT    NOT NULL DEFAULT (''), "
                                    "    vote    INTEGER NOT NULL DEFAULT (-1), "
                                    "    PRIMARY KEY (tmdbId) "
+                                   ");"));
+        m_db.exec (QStringLiteral ("CREATE TABLE IF NOT EXISTS sublists ( "
+                                   "    tmdbId  INTEGER NOT NULL, "
+                                   "    type    TEXT    NOT NULL DEFAULT (''), "
+                                   "    json    TEXT    NOT NULL DEFAULT (''), "
+                                   "    PRIMARY KEY (tmdbId, type) "
                                    ");"));
         m_db.commit ();
         loadMoviesFromDb ();
@@ -98,12 +102,15 @@ void MoviesWorker::searchForMovie (QString name) {
     //request.setRawHeader ("Accept-Encoding", "gzip,deflate,sdch");
     qDebug () << request.url ().toString ();
     QNetworkReply * reply = m_nam->get (request);
-    connect (reply, &QNetworkReply::finished, this, &MoviesWorker::onSearchReply);
+    connect (reply, &QNetworkReply::finished,         this, &MoviesWorker::onSearchReply);
+    connect (reply, &QNetworkReply::uploadProgress,   this, &MoviesWorker::onReplyProgress);
+    connect (reply, &QNetworkReply::downloadProgress, this, &MoviesWorker::onReplyProgress);
     connect (reply, SIGNAL(error(QNetworkReply::NetworkError)),
              this,  SLOT(onReplyError(QNetworkReply::NetworkError)));
 }
 
 void MoviesWorker::removeMovieInfo (int tmdbId) {
+    qDebug () << "MoviesWorker::removeMovieInfo" << tmdbId;
     m_db.transaction ();
     QSqlQuery queryRemove (m_db);
     queryRemove.prepare   (QStringLiteral ("DELETE FROM movies WHERE tmdbId=:tmdbId"));
@@ -119,12 +126,15 @@ void MoviesWorker::getFullMovieInfo (int tmdbId) {
     qDebug () << request.url ().toString ();
     QNetworkReply * reply = m_nam->get (request);
     connect (reply, &QNetworkReply::finished, this, &MoviesWorker::onMovieReply);
+    connect (reply, &QNetworkReply::uploadProgress,   this, &MoviesWorker::onReplyProgress);
+    connect (reply, &QNetworkReply::downloadProgress, this, &MoviesWorker::onReplyProgress);
     connect (reply, SIGNAL(error(QNetworkReply::NetworkError)),
              this,  SLOT(onReplyError(QNetworkReply::NetworkError)));
     emit movieItemAdded (tmdbId);
 }
 
 void MoviesWorker::updateMovieVote (int tmdbId, int vote) {
+    qDebug () << "MoviesWorker::updateMovieVote" << tmdbId << vote;
     m_db.transaction ();
     QSqlQuery queryVote (m_db);
     queryVote.prepare   (QStringLiteral ("UPDATE movies SET vote=:vote WHERE tmdbId=:tmdbId"));
@@ -140,21 +150,18 @@ void MoviesWorker::updateMovieVote (int tmdbId, int vote) {
 void MoviesWorker::onSearchReply () {
     qDebug () << "MoviesWorker::onSearchReply";
     QVariantList ret;
-    QNetworkReply * reply = qobject_cast<QNetworkReply *>(sender ());
-    Q_ASSERT (reply);
+    GET_SENDER (QNetworkReply, reply);
     if (reply->error () == QNetworkReply::NoError) {
         QByteArray data = reply->readAll ();
-        QJsonParseError error;
         qDebug () << "data=" << data;
-        QJsonDocument json = QJsonDocument::fromJson (data, &error);
-        if (!json.isNull () && json.isObject ()) {
-            QVariantList list = json.object ().value ("results").toArray ().toVariantList ();
+        QVariant object = JSON::parse (QString::fromUtf8 (data));
+        if (object.isValid ()) {
+            QVariantList list = getSubValue (object, QStringLiteral ("results")).value<QVariantList> ();
             foreach (QVariant value, list) {
-                QVariantMap movie = value.toMap ();
-                QString poster = movie.value (QStringLiteral ("poster_path")).toString ();
+                QString poster = getSubValue (value, QStringLiteral ("poster_path")).value<QString> ();
                 QVariantMap item;
-                item.insert (QStringLiteral ("tmdbId"), movie.value (QStringLiteral ("id")).toInt ());
-                item.insert (QStringLiteral ("title"),  movie.value (QStringLiteral ("original_title")).toString ());
+                item.insert (QStringLiteral ("tmdbId"), getSubValue (value, QStringLiteral ("id")).value<int> ());
+                item.insert (QStringLiteral ("title"),  getSubValue (value, QStringLiteral ("original_title")).value<QString> ());
                 item.insert (QStringLiteral ("cover"),  (!poster.isEmpty () ? tmdbImgUrl + poster : imgNoPoster));
                 ret.append (item);
             }
@@ -170,37 +177,34 @@ void MoviesWorker::onSearchReply () {
 }
 
 void MoviesWorker::onMovieReply () {
-    QNetworkReply * reply = qobject_cast<QNetworkReply *>(sender ());
-    Q_ASSERT (reply);
+    qDebug () << "MoviesWorker::onMovieReply";
+    GET_SENDER (QNetworkReply, reply);
     if (reply->error () == QNetworkReply::NoError) {
         QByteArray data = reply->readAll ();
-        QJsonParseError error;
         qDebug () << "data=" << data;
-        QJsonDocument json = QJsonDocument::fromJson (data, &error);
-        if (!json.isNull () && json.isObject ()) {
-            QVariantMap movie = json.object ().toVariantMap ();
-
-            int     tmdbId = movie.value (QStringLiteral ("id")).toInt ();
-            QString poster = movie.value (QStringLiteral ("poster_path")).toString ();
+        QVariant object = JSON::parse (QString::fromUtf8 (data));
+        if (object.isValid ()) {
+            int     tmdbId = getSubValue (object, QStringLiteral ("id")).value<int> ();
+            QString poster = getSubValue (object, QStringLiteral ("poster_path")).value<QString> ();
 
             QVariantMap movieItem;
             movieItem.insert (QStringLiteral ("tmdbId"),    tmdbId);
-            movieItem.insert (QStringLiteral ("title"),     movie.value (QStringLiteral ("original_title")).toString ());
-            movieItem.insert (QStringLiteral ("overview"),  movie.value (QStringLiteral ("overview")).toString ());
+            movieItem.insert (QStringLiteral ("title"),     getSubValue (object, QStringLiteral ("original_title")).value<QString> ());
+            movieItem.insert (QStringLiteral ("overview"),  getSubValue (object, QStringLiteral ("overview")).value<QString> ());
             movieItem.insert (QStringLiteral ("cover"),     (!poster.isEmpty () ? tmdbImgUrl + poster : imgNoPoster));
             emit movieItemUpdated (tmdbId, movieItem);
 
-            QVariantList releaseList = movie.value ("releases").toMap ().value ("countries").toList ();
-            emit releaseDatesUpdated (releaseList);
+            QVariantList releaseDatesList = getSubValue (object, QStringLiteral ("releases/countries")).value<QVariantList> ();
+            emit releaseDatesUpdated (releaseDatesList);
 
-            QVariantList altTitlesList = movie.value ("alternative_titles").toMap ().value ("titles").toList ();
+            QVariantList altTitlesList = getSubValue (object, QStringLiteral ("alternative_titles/titles")).value<QVariantList> ();
             emit altTitlesUpdated (altTitlesList);
 
-            QVariantList crewTeamList = movie.value ("credits").toMap ().value ("crew").toList ();
+            QVariantList crewTeamList = getSubValue (object, QStringLiteral ("credits/crew")).value<QVariantList> ();
             emit crewTeamUpdated (crewTeamList);
 
-            QVariantList castRoleList = movie.value ("credits").toMap ().value ("cast").toList ();
-            emit castRolesUpdated (castRoleList);
+            QVariantList castRolesList = getSubValue (object, QStringLiteral ("credits/cast")).value<QVariantList> ();
+            emit castRolesUpdated (castRolesList);
         }
         else {
             qWarning () << "Movie info : result is not an object !";
@@ -211,8 +215,12 @@ void MoviesWorker::onMovieReply () {
     }
 }
 
+void MoviesWorker::onReplyProgress (qint64 currBytes, qint64 totalBytes) {
+    GET_SENDER (QNetworkReply, reply);
+    qWarning () << "reply=" << reply << "progress=" << currBytes << "/" << totalBytes << "bytes";
+}
+
 void MoviesWorker::onReplyError (QNetworkReply::NetworkError code) {
-    QNetworkReply * reply = qobject_cast<QNetworkReply *>(sender ());
-    Q_ASSERT (reply);
-    qWarning () << "reply error=" << code << reply->errorString ();
+    GET_SENDER (QNetworkReply, reply);
+    qWarning () << "reply=" << reply << "error=" << code << reply->errorString ();
 }
