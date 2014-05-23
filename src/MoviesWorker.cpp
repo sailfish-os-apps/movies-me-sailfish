@@ -19,9 +19,6 @@
     TYPE * NAME = qobject_cast<TYPE *> (sender ()); \
     Q_ASSERT (NAME)
 
-
-
-
 MoviesWorker::MoviesWorker (QObject * parent) : QObject (parent) {
     m_db  = QSqlDatabase::addDatabase (QStringLiteral ("QSQLITE"));
     m_nam = new QNetworkAccessManager (this);
@@ -30,13 +27,13 @@ MoviesWorker::MoviesWorker (QObject * parent) : QObject (parent) {
         m_hashCountries.insert (ISO::countryCodeFromISO3166 (QLocale::Country (countryEnum)),
                                 ISO::countryNameFromISO3166 (QLocale::Country (countryEnum)));
     }
-    qDebug () << "m_hashCountries:" << m_hashCountries.count () << m_hashCountries;
+    //qDebug () << "m_hashCountries:" << m_hashCountries.count () << m_hashCountries;
 
     for (int langEnum = 0; langEnum < QLocale::LastLanguage; langEnum++) {
         m_hashLanguages.insert (ISO::languageCodeFromISO639 (QLocale::Language (langEnum)),
                                 ISO::languageNameFromISO639 (QLocale::Language (langEnum)));
     }
-    qDebug () << "m_hashLanguages:" << m_hashLanguages.count () << m_hashLanguages;
+    //qDebug () << "m_hashLanguages:" << m_hashLanguages.count () << m_hashLanguages;
 }
 
 void MoviesWorker::initialize () {
@@ -153,7 +150,7 @@ void MoviesWorker::onSearchReply () {
     GET_SENDER (QNetworkReply, reply);
     if (reply->error () == QNetworkReply::NoError) {
         QByteArray data = reply->readAll ();
-        qDebug () << "data=" << data;
+        //qDebug () << "data=" << data;
         QVariant object = JSON::parse (QString::fromUtf8 (data));
         if (object.isValid ()) {
             QVariantList list = getSubValue (object, QStringLiteral ("results")).value<QVariantList> ();
@@ -181,7 +178,7 @@ void MoviesWorker::onMovieReply () {
     GET_SENDER (QNetworkReply, reply);
     if (reply->error () == QNetworkReply::NoError) {
         QByteArray data = reply->readAll ();
-        qDebug () << "data=" << data;
+        //qDebug () << "data=" << data;
         QVariant object = JSON::parse (QString::fromUtf8 (data));
         if (object.isValid ()) {
             int     tmdbId = getSubValue (object, QStringLiteral ("id")).value<int> ();
