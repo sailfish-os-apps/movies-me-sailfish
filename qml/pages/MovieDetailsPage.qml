@@ -110,6 +110,28 @@ Page {
                     right: parent.right;
                     margins: Theme.paddingMedium;
                 }
+                onLineLaidOut: {
+                    var pad = anchors.margins;
+                    if (line.y <= (imgCover.height + pad)) {
+                        line.x  = (imgCover.width  + pad);
+                        line.width = (width - line.x);
+                    }
+                    else {
+                        line.x = 0;
+                        line.width = width;
+                    }
+                }
+
+                CachedImage {
+                    id: imgCover;
+                    width: (coverWidth * 0.5);
+                    height: (coverHeight * 0.5);
+                    source: (engine.currentMovieObject ? engine.currentMovieObject.cover : "");
+                    anchors {
+                        top: parent.top;
+                        left: parent.left;
+                    }
+                }
             }
             Item {
                 width: height;

@@ -91,6 +91,11 @@ Page {
         }
 
         Rectangle {
+            color: "black";
+            opacity: 0.65;
+            anchors.fill: parent;
+        }
+        Rectangle {
             color: "white";
             opacity: 0.05;
             anchors.fill: (engine.sortedFilteredMoviesModel.toggleFilterSeen ? tabSeen : tabWatchList);
