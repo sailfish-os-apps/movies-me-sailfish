@@ -6,19 +6,44 @@
 #include <QVariantList>
 #include <QVariantMap>
 #include <QQmlHelpers>
+#include <QSortFilterProxyModel>
 #include <QQmlObjectListModel>
 #include <QQmlVariantListModel>
 
+class MovieItem;
 class MoviesWorker;
+
+class MoviesSortFilterProxy : public QSortFilterProxyModel {
+    Q_OBJECT
+    QML_WRITABLE_PROPERTY (bool, toggleFilterSeen)
+
+public:
+    explicit MoviesSortFilterProxy (QQmlObjectListModel * model, QObject * parent = NULL);
+
+protected:
+    bool filterAcceptsRow (int sourceRow, const QModelIndex &sourceParent) const;
+    bool lessThan (const QModelIndex & left, const QModelIndex & right) const;
+
+private slots:
+    void onToggleFilterSeenChanged ();
+
+private:
+    int                   m_roleTmdbId;
+    int                   m_roleVote;
+    QQmlObjectListModel * m_moviesModel;
+};
+
 class MoviesEngine : public QObject {
     Q_OBJECT
-    QML_WRITABLE_PROPERTY (int,                    currentMovieId)
-    QML_CONSTANT_PROPERTY (QQmlObjectListModel  *, searchModel)
-    QML_CONSTANT_PROPERTY (QQmlObjectListModel  *, moviesModel)
-    QML_CONSTANT_PROPERTY (QQmlVariantListModel *, releaseDatesList)
-    QML_CONSTANT_PROPERTY (QQmlVariantListModel *, castRolesList)
-    QML_CONSTANT_PROPERTY (QQmlVariantListModel *, crewTeamList)
-    QML_CONSTANT_PROPERTY (QQmlVariantListModel *, altTitlesList)
+    QML_WRITABLE_PROPERTY (int,                     currentMovieId)
+    QML_READONLY_PROPERTY (MovieItem             *, currentMovieObject)
+    QML_CONSTANT_PROPERTY (QQmlObjectListModel   *, searchModel)
+    QML_CONSTANT_PROPERTY (QQmlObjectListModel   *, moviesModel)
+    QML_CONSTANT_PROPERTY (QQmlVariantListModel  *, releaseDatesList)
+    QML_CONSTANT_PROPERTY (QQmlVariantListModel  *, castRolesList)
+    QML_CONSTANT_PROPERTY (QQmlVariantListModel  *, crewTeamList)
+    QML_CONSTANT_PROPERTY (QQmlVariantListModel  *, altTitlesList)
+    QML_CONSTANT_PROPERTY (QSortFilterProxyModel *, sortedFilteredMoviesModel)
 
 public:
     explicit MoviesEngine         (QObject * parent = NULL);
@@ -29,6 +54,7 @@ public:
 public slots:
     void requestSearch             (QString name);
     void requestFullMovieInfo      (int tmdbId);
+    void requestRemoveMovie        (int tmdbId);
     void requestUpdateVote         (int tmdbId, int vote);
 
 signals:

@@ -34,9 +34,11 @@ int main (int argc, char * argv []) {
     }
     QSettings::setDefaultFormat (QSettings::IniFormat);
     QGuiApplication::setApplicationName ("harbour-moviesme");
-    qmlRegisterUncreatableType<QAbstractItemModel>    (QML_MODULE, "AbstractItemModel",  "!!!");
-    qmlRegisterUncreatableType<QAbstractListModel>    (QML_MODULE, "AbstractListModel",  "!!!");
-    qmlRegisterUncreatableType<QQmlObjectListModel>   (QML_MODULE, "ObjectListModel",    "!!!");
+    qmlRegisterUncreatableType<QAbstractItemModel>    (QML_MODULE, "AbstractItemModel",    "!!!");
+    qmlRegisterUncreatableType<QAbstractListModel>    (QML_MODULE, "AbstractListModel",    "!!!");
+    qmlRegisterUncreatableType<QSortFilterProxyModel> (QML_MODULE, "SortFilterProxyModel", "!!!");
+    qmlRegisterUncreatableType<QQmlObjectListModel>   (QML_MODULE, "ObjectListModel",      "!!!");
+    qmlRegisterUncreatableType<QQmlVariantListModel>  (QML_MODULE, "VariantListModel",     "!!!");
     qmlRegisterType<MoviesImageCacher>                (QML_MODULE, "MoviesImageCacher");
     qmlRegisterType<MovieItem>                        (QML_MODULE, "MovieItem");
     qmlRegisterType<MoviesEngine>                     (QML_MODULE, "MoviesEngine");

@@ -81,11 +81,11 @@ void MoviesWorker::loadMoviesFromDb () {
 }
 
 void MoviesWorker::searchForMovie (QString name) {
-    qDebug () << "MoviesWorker::searchForMovie" << name;
+    //qDebug () << "MoviesWorker::searchForMovie" << name;
     QNetworkRequest request (movieSearchRequest.arg (tmdbApiUrl).arg (tmdbApiKey).arg (name.replace (" ", "+")));
     //request.setRawHeader ("Proxy-Connection", "keep-alive");
     //request.setRawHeader ("Accept-Encoding", "gzip,deflate,sdch");
-    qDebug () << request.url ().toString ();
+    //qDebug () << request.url ().toString ();
     QNetworkReply * reply = m_nam->get (request);
     connect (reply, &QNetworkReply::finished,         this, &MoviesWorker::onSearchReply);
     connect (reply, &QNetworkReply::uploadProgress,   this, &MoviesWorker::onReplyProgress);
@@ -95,20 +95,24 @@ void MoviesWorker::searchForMovie (QString name) {
 }
 
 void MoviesWorker::removeMovieInfo (int tmdbId) {
-    qDebug () << "MoviesWorker::removeMovieInfo" << tmdbId;
+    //qDebug () << "MoviesWorker::removeMovieInfo" << tmdbId;
     m_db.transaction ();
-    QSqlQuery queryRemove (m_db);
-    queryRemove.prepare   (QStringLiteral ("DELETE FROM movies WHERE tmdbId=:tmdbId"));
-    queryRemove.bindValue (QStringLiteral (":tmdbId"), tmdbId);
-    queryRemove.exec      ();
+    QSqlQuery queryRemoveMovie (m_db);
+    queryRemoveMovie.prepare   (QStringLiteral ("DELETE FROM movies WHERE tmdbId=:tmdbId"));
+    queryRemoveMovie.bindValue (QStringLiteral (":tmdbId"), tmdbId);
+    queryRemoveMovie.exec      ();
+    QSqlQuery queryRemoveInfo  (m_db);
+    queryRemoveInfo.prepare    (QStringLiteral ("DELETE FROM sublists WHERE tmdbId=:tmdbId"));
+    queryRemoveInfo.bindValue  (QStringLiteral (":tmdbId"), tmdbId);
+    queryRemoveInfo.exec       ();
     m_db.commit ();
     emit movieItemRemoved (tmdbId);
 }
 
 void MoviesWorker::getFullMovieInfo (int tmdbId) {
-    qDebug () << "MoviesWorker::getFullMovieInfo" << tmdbId;
+    //qDebug () << "MoviesWorker::getFullMovieInfo" << tmdbId;
     QNetworkRequest request (movieInfoRequest.arg (tmdbApiUrl).arg (tmdbId).arg (tmdbApiKey));
-    qDebug () << request.url ().toString ();
+    //qDebug () << request.url ().toString ();
     QNetworkReply * reply = m_nam->get (request);
     connect (reply, &QNetworkReply::finished, this, &MoviesWorker::onMovieReply);
     connect (reply, &QNetworkReply::uploadProgress,   this, &MoviesWorker::onReplyProgress);
@@ -119,7 +123,7 @@ void MoviesWorker::getFullMovieInfo (int tmdbId) {
 }
 
 void MoviesWorker::updateMovieVote (int tmdbId, int vote) {
-    qDebug () << "MoviesWorker::updateMovieVote" << tmdbId << vote;
+    //qDebug () << "MoviesWorker::updateMovieVote" << tmdbId << vote;
     m_db.transaction ();
     QSqlQuery queryVote (m_db);
     queryVote.prepare   (QStringLiteral ("UPDATE movies SET vote=:vote WHERE tmdbId=:tmdbId"));
@@ -133,7 +137,7 @@ void MoviesWorker::updateMovieVote (int tmdbId, int vote) {
 }
 
 void MoviesWorker::onSearchReply () {
-    qDebug () << "MoviesWorker::onSearchReply";
+    //qDebug () << "MoviesWorker::onSearchReply";
     QVariantList ret;
     GET_SENDER (QNetworkReply, reply);
     if (reply->error () == QNetworkReply::NoError) {
@@ -162,7 +166,7 @@ void MoviesWorker::onSearchReply () {
 }
 
 void MoviesWorker::onMovieReply () {
-    qDebug () << "MoviesWorker::onMovieReply";
+    //qDebug () << "MoviesWorker::onMovieReply";
     GET_SENDER (QNetworkReply, reply);
     if (reply->error () == QNetworkReply::NoError) {
         QByteArray data = reply->readAll ();
@@ -223,7 +227,7 @@ void MoviesWorker::onMovieReply () {
 }
 
 void MoviesWorker::loadMovieDetailsFromDb (int tmdbId) {
-    qDebug () << "MoviesWorker::loadMovieDetailsFromDb" << tmdbId;
+    //qDebug () << "MoviesWorker::loadMovieDetailsFromDb" << tmdbId;
     QSqlQuery queryLoad (m_db);
     queryLoad.prepare   (QStringLiteral ("SELECT tmdbId, title, cover, summary, vote FROM movies WHERE tmdbId=:tmdbId"));
     queryLoad.bindValue (QStringLiteral (":tmdbId"), tmdbId);

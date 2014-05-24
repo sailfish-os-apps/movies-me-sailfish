@@ -1,5 +1,6 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
+import harbour.moviesme.myPrivateImports 1.0
 import "../components"
 
 Page {
@@ -9,7 +10,7 @@ Page {
         id: view;
         cellWidth: (width * 0.25);
         cellHeight: (coverHeight * cellWidth / coverWidth);
-        model: engine.moviesModel;
+        model: engine.sortedFilteredMoviesModel;
         header: PageHeader {
             title: qsTr ("Movies'me");
             width: view.width;
@@ -90,11 +91,72 @@ Page {
         }
 
         Rectangle {
-            color: "black";
-            opacity: 0.65;
-            anchors.fill: parent;
+            color: "white";
+            opacity: 0.05;
+            anchors.fill: (engine.sortedFilteredMoviesModel.toggleFilterSeen ? tabSeen : tabWatchList);
         }
+        MouseArea {
+            id: tabSeen;
+            anchors {
+                top: parent.top;
+                left: parent.left;
+                right: parent.horizontalCenter;
+                bottom: parent.bottom;
+            }
+            onClicked: { engine.sortedFilteredMoviesModel.toggleFilterSeen = true; }
+
+            property bool active : engine.sortedFilteredMoviesModel.toggleFilterSeen;
+
+            Row {
+                spacing: Theme.paddingSmall;
+                anchors.centerIn: parent;
+
+                Image {
+                    width: height;
+                    height: (Theme.itemSizeMedium * 0.5);
+                    source: "image://theme/icon-l-star?%1".arg (lblSeen.color.toString ());
+                    anchors.verticalCenter: parent.verticalCenter;
+                }
+                Label {
+                    id: lblSeen;
+                    text: qsTr ("Seen");
+                    color: (tabSeen.active ? Theme.highlightColor : Theme.secondaryColor);
+                    font.pixelSize: Theme.fontSizeSmall;
+                    anchors.verticalCenter: parent.verticalCenter;
+                }
+            }
+        }
+        MouseArea {
+            id: tabWatchList;
+            anchors {
+                top: parent.top;
+                left: parent.horizontalCenter;
+                right: parent.right;
+                bottom: parent.bottom;
+            }
+            onClicked: { engine.sortedFilteredMoviesModel.toggleFilterSeen = false; }
+
+            property bool active : !engine.sortedFilteredMoviesModel.toggleFilterSeen;
+
+            Row {
+                spacing: Theme.paddingSmall;
+                anchors.centerIn: parent;
 
 
+                Image {
+                    width: height;
+                    height: (Theme.itemSizeMedium * 0.5);
+                    source: "image://theme/icon-l-date?%1".arg (lblWatchlist.color.toString ());
+                    anchors.verticalCenter: parent.verticalCenter;
+                }
+                Label {
+                    id: lblWatchlist;
+                    text: qsTr ("To-watch");
+                    color: (tabWatchList.active ? Theme.highlightColor : Theme.secondaryColor);
+                    font.pixelSize: Theme.fontSizeSmall;
+                    anchors.verticalCenter: parent.verticalCenter;
+                }
+            }
+        }
     }
 }

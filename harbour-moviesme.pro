@@ -57,7 +57,8 @@ OTHER_FILES += \
     qml/pages/MoviesListPage.qml \
     qml/pages/MovieDetailsPage.qml \
     qml/pages/MoviesSearchAndAddPage.qml \
-    qml/components/CachedImage.qml
+    qml/components/CachedImage.qml \
+    harbour-moviesme.svg
 
 # to disable building translations every time, comment out the
 # following CONFIG line
